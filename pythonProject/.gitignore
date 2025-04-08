@@ -3,4 +3,4 @@
 data/*
 conversations.json
 config.py
-bot/personas.json
+data/personalities.json

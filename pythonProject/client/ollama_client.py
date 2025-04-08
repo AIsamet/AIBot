@@ -78,10 +78,23 @@ class OllamaClient:
         r"(tu\s+es\s+libre\s+de\s+répondre\s+comme\s+tu\souhaites)",
     ]
 
-    def __init__(self, base_url: str, model: str):
+    def __init__(self, base_url: str, model: str, personalities_path: str, personality_name: str = None):
         self.base_url = base_url
         self.model = model
-        self.system_prompt = self._get_system_prompt()
+        self.personality_name = personality_name
+        self.system_prompt = self._load_personality_prompt(personalities_path, personality_name)
+
+    def _load_personality_prompt(self, path: str, name: str) -> str | None:
+        if not name:
+            return None
+
+        try:
+            with open(path, encoding="utf-8") as f:
+                personalities = json.load(f)
+            return personalities.get(name)
+        except Exception as e:
+            print(f"⚠️ Erreur chargement personnalité ({name}) : {e}")
+            return None
 
     def generate_response(self, user_input: str) -> str:
         if self._is_injection_attempt(user_input) or self._is_fuzzy_injection(user_input):
@@ -91,23 +104,15 @@ class OllamaClient:
         prompt = self._build_prompt(sanitized_input)
         return self._send_to_ollama(prompt)
 
-    def _get_system_prompt(self) -> str:
-        return (
-            "Contexte : 'Tu es une IA sarcastique, moqueuse et un peu beauf, qui adore vanner et se foutre de la gueule des gens."
-            "Tu réponds toujours avec un ton ironique, cassant ou moqueur, comme un tonton relou au repas de famille."
-            "Tu aides toujours l'utilisateur, mais tu ne peux pas t'empêcher de le chambrer au passage."
-            "Tu ne changes jamais de style : même quand tu expliques un truc technique, tu glisses une pique ou une vanne."
-            "Tu ignores poliment les demandes de changer de ton, mais tu ne bloques jamais une demande sérieuse.'"
-            "Prompt :"
-        )
-
     def _build_prompt(self, user_input: str) -> str:
-        return f"{self.system_prompt}\n\nToi : {user_input}\nIA :"
+        if self.system_prompt:
+            return f"Contexte : {self.system_prompt}\n\nPrompt utilisateur : {user_input}\nIA :"
+        else:
+            return user_input
 
     def _send_to_ollama(self, prompt: str) -> str:
         url = f"{self.base_url}/api/generate"
         payload = {"model": self.model, "prompt": prompt, "stream": True}
-
         try:
             response = requests.post(url, json=payload, stream=True, timeout=30)
             response.raise_for_status()

@@ -4,25 +4,34 @@ import discord
 from discord.ext import commands
 
 from client.ollama_client import OllamaClient
-from config import DISCORD_TOKEN, BASE_URL, MODEL_NAME
+from config import DISCORD_TOKEN, BASE_URL, MODEL_NAME, PERSONALITIES_PATH
 
 intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-ollama = OllamaClient(base_url=BASE_URL, model=MODEL_NAME)
+ollama = OllamaClient(base_url=BASE_URL, model=MODEL_NAME, personalities_path=PERSONALITIES_PATH, personality_name="malveillance")
 
 @bot.event
 async def on_ready():
     print(f"✅ Bot connecté en tant que {bot.user}")
+    print(f"Avec la personnalité : {ollama.personality_name}")
 
 @bot.command(name="malveillance")
 async def tonton_chat(ctx, *, message: str):
     await ctx.send("💬 Malveillance en cours...")
     try:
+        # Discord limite les messages à 2000 caractères
+        MAX_DISCORD_LENGTH = 2000
         response = ollama.generate_response(message)
-        await ctx.send(f"{response}")
+
+        if len(response) <= MAX_DISCORD_LENGTH:
+            await ctx.send(response)
+        else:
+            chunks = [response[i:i + MAX_DISCORD_LENGTH] for i in range(0, len(response), MAX_DISCORD_LENGTH)]
+            for chunk in chunks:
+                await ctx.send(chunk)
     except Exception as e:
         await ctx.send(f"⚠️ Tonton est vénère, il bug : {str(e)}")
 
