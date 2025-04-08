@@ -110,7 +110,7 @@ class OllamaClient:
 
     def _build_prompt(self, user_input: str) -> str:
         if self.system_prompt:
-            return f"Contexte : {self.system_prompt}\n\nPrompt utilisateur : {user_input}\nIA :"
+            return f"Ton role play : {self.system_prompt}\n\nPrompt utilisateur : {user_input}\nIA :"
         else:
             return user_input
 

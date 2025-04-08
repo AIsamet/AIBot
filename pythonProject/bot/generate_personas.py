@@ -10,7 +10,7 @@ ollama = OllamaClient(base_url=BASE_URL, model=MODEL_NAME, secured=False)
 CHUNK_SIZE = 60
 MAX_CHUNKS = 30  # limite pour éviter de faire 100 appels
 MSG_PATH = "../conversations.json"
-OUT_PATH = "personas.json"
+OUT_PATH = "user_personas.json"
 TMP_CHUNKS_DIR = "chunk_profiles"
 
 os.makedirs(TMP_CHUNKS_DIR, exist_ok=True)
@@ -89,7 +89,7 @@ def main():
     with open(OUT_PATH, "w", encoding="utf-8") as f:
         json.dump(all_personas, f, indent=2, ensure_ascii=False)
 
-    print("✅ Tous les profils générés dans personas.json")
+    print("✅ Tous les profils générés dans user_personas.json")
 
 if __name__ == "__main__":
     main()

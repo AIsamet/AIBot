@@ -1,40 +1,54 @@
 import json
 import random
-
 import discord
 from discord.ext import commands
 
 from client.ollama_client import OllamaClient
 from config import DISCORD_TOKEN, BASE_URL, MODEL_NAME, PERSONALITIES_PATH
 
+# --- Configuration ---
 intents = discord.Intents.default()
 intents.message_content = True
-
 bot = commands.Bot(command_prefix="!", intents=intents)
+ollama = OllamaClient(
+    base_url=BASE_URL,
+    model=MODEL_NAME,
+    personalities_path=PERSONALITIES_PATH,
+    personality_name="malveillanceMax"
+)
 
-ollama = OllamaClient(base_url=BASE_URL, model=MODEL_NAME, personalities_path=PERSONALITIES_PATH, personality_name="malveillanceMax")
+# --- Chargement des personas ---
+try:
+    with open("personas.json", encoding="utf-8") as f:
+        USER_PERSONAS = json.load(f)
+    print(f"✅ {len(USER_PERSONAS)} personas chargés.")
+except FileNotFoundError:
+    USER_PERSONAS = {}
+    print("⚠️ Aucun fichier personas.json trouvé.")
 
+# --- Utilitaires ---
+MAX_DISCORD_LENGTH = 2000
+PROBA_REPONSE = 0.10
+
+def build_prompt(message_text: str, author_name: str) -> str:
+    persona = USER_PERSONAS.get(author_name)
+    if persona:
+        return f"Profil de l'utilisateur :\n{persona}\n\nMessage reçu :\n{message_text}"
+    return message_text
+
+def split_response(response: str) -> list[str]:
+    return [response[i:i + MAX_DISCORD_LENGTH] for i in range(0, len(response), MAX_DISCORD_LENGTH)]
+
+async def send_response(channel, response: str):
+    chunks = split_response(response)
+    for chunk in chunks:
+        await channel.send(chunk)
+
+# --- Events ---
 @bot.event
 async def on_ready():
     print(f"✅ Bot connecté en tant que {bot.user}")
-    print(f"Avec la personnalité : {ollama.personality_name}")
-
-@bot.command(name="malveillance")
-async def tonton_chat(ctx, *, message: str):
-    await ctx.send("💬 Malveillance en cours...")
-    try:
-        # Discord limite les messages à 2000 caractères
-        MAX_DISCORD_LENGTH = 2000
-        response = ollama.generate_response(message)
-
-        if len(response) <= MAX_DISCORD_LENGTH:
-            await ctx.send(response)
-        else:
-            chunks = [response[i:i + MAX_DISCORD_LENGTH] for i in range(0, len(response), MAX_DISCORD_LENGTH)]
-            for chunk in chunks:
-                await ctx.send(chunk)
-    except Exception as e:
-        await ctx.send(f"⚠️ Tonton est vénère, il bug : {str(e)}")
+    print(f"Personnalité active : {ollama.personality_name}")
 
 @bot.event
 async def on_message(message):
@@ -45,24 +59,27 @@ async def on_message(message):
         await bot.process_commands(message)
         return
 
-    proba_reponse = 1
-    if random.random() < proba_reponse:
+    if random.random() < PROBA_REPONSE:
         try:
             await message.channel.typing()
-            response = ollama.generate_response(message.content)
-
-            MAX_DISCORD_LENGTH = 2000
-            if len(response) <= MAX_DISCORD_LENGTH:
-                await message.channel.send(response)
-            else:
-                chunks = [response[i:i + MAX_DISCORD_LENGTH] for i in range(0, len(response), MAX_DISCORD_LENGTH)]
-                for chunk in chunks:
-                    await message.channel.send(chunk)
+            prompt = build_prompt(message.content, message.author.name)
+            response = ollama.generate_response(prompt)
+            await send_response(message.channel, response)
         except Exception as e:
-            await message.channel.send(f"⚠️ Tonton a crashé sur une vanne : {str(e)}")
+            await message.channel.send(f"⚠️ Tonton a crashé : {str(e)}")
 
     await bot.process_commands(message)
 
+# --- Commandes ---
+@bot.command(name="malveillance")
+async def tonton_chat(ctx, *, message: str):
+    await ctx.send("💬 Malveillance en cours...")
+    try:
+        prompt = build_prompt(message, ctx.author.name)
+        response = ollama.generate_response(prompt)
+        await send_response(ctx, response)
+    except Exception as e:
+        await ctx.send(f"⚠️ Tonton est vénère, il bug : {str(e)}")
 
 @bot.command(name="scrape")
 @commands.is_owner()
@@ -75,8 +92,8 @@ async def scrape_conversations(ctx):
 
     for idx, channel in enumerate(ctx.guild.text_channels, start=1):
         print(f"\n🔍 ({idx}/{total_channels}) Lecture de #{channel.name}...")
-
         message_count = 0
+
         try:
             async for msg in channel.history(limit=None, oldest_first=True):
                 if not msg.content:
@@ -92,10 +109,6 @@ async def scrape_conversations(ctx):
                     "timestamp": msg.created_at.isoformat()
                 })
 
-                short = (msg.content[:50] + "...") if len(msg.content) > 50 else msg.content
-                print(f"  #{message_count} [{msg.created_at.strftime('%Y-%m-%d %H:%M')}] "
-                      f"{msg.author.name}: {short}")
-
                 if message_count % 100 == 0:
                     print(f"  👉 {message_count} messages dans #{channel.name}...")
 
@@ -109,7 +122,7 @@ async def scrape_conversations(ctx):
         json.dump(all_messages, f, indent=2, ensure_ascii=False)
 
     print(f"\n📁 Scraping terminé : {total_messages} messages sauvegardés dans conversations.json")
-    await ctx.reply(f"✅ Scraping terminé ! ({total_messages} messages). Résultat dispo en local (console).", mention_author=True)
+    await ctx.reply(f"✅ Scraping terminé ! ({total_messages} messages).", mention_author=True)
 
-
+# --- Démarrage ---
 bot.run(DISCORD_TOKEN)
