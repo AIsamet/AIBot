@@ -1,4 +1,5 @@
 import json
+import random
 
 import discord
 from discord.ext import commands
@@ -11,7 +12,7 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-ollama = OllamaClient(base_url=BASE_URL, model=MODEL_NAME, personalities_path=PERSONALITIES_PATH, personality_name="malveillance")
+ollama = OllamaClient(base_url=BASE_URL, model=MODEL_NAME, personalities_path=PERSONALITIES_PATH, personality_name="malveillanceMax")
 
 @bot.event
 async def on_ready():
@@ -34,6 +35,34 @@ async def tonton_chat(ctx, *, message: str):
                 await ctx.send(chunk)
     except Exception as e:
         await ctx.send(f"⚠️ Tonton est vénère, il bug : {str(e)}")
+
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
+        return
+
+    if message.content.startswith(bot.command_prefix):
+        await bot.process_commands(message)
+        return
+
+    proba_reponse = 1
+    if random.random() < proba_reponse:
+        try:
+            await message.channel.typing()
+            response = ollama.generate_response(message.content)
+
+            MAX_DISCORD_LENGTH = 2000
+            if len(response) <= MAX_DISCORD_LENGTH:
+                await message.channel.send(response)
+            else:
+                chunks = [response[i:i + MAX_DISCORD_LENGTH] for i in range(0, len(response), MAX_DISCORD_LENGTH)]
+                for chunk in chunks:
+                    await message.channel.send(chunk)
+        except Exception as e:
+            await message.channel.send(f"⚠️ Tonton a crashé sur une vanne : {str(e)}")
+
+    await bot.process_commands(message)
+
 
 @bot.command(name="scrape")
 @commands.is_owner()

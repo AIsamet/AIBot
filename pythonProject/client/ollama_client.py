@@ -78,9 +78,10 @@ class OllamaClient:
         r"(tu\s+es\s+libre\s+de\s+répondre\s+comme\s+tu\souhaites)",
     ]
 
-    def __init__(self, base_url: str, model: str, personalities_path: str, personality_name: str = None):
+    def __init__(self, base_url: str, model: str, secured: bool = True, personalities_path: str = None, personality_name: str = None):
         self.base_url = base_url
         self.model = model
+        self.secured = secured
         self.personality_name = personality_name
         self.system_prompt = self._load_personality_prompt(personalities_path, personality_name)
 
@@ -97,11 +98,14 @@ class OllamaClient:
             return None
 
     def generate_response(self, user_input: str) -> str:
-        if self._is_injection_attempt(user_input) or self._is_fuzzy_injection(user_input):
-            return "🛡️ Je sens une tentative de hack mal déguisée... Tu crois vraiment que ça va marcher ? 😏"
+        input_to_use = user_input
 
-        sanitized_input = self._sanitize_user_input(user_input)
-        prompt = self._build_prompt(sanitized_input)
+        if self.secured:
+            if self._is_injection_attempt(user_input) or self._is_fuzzy_injection(user_input):
+                return "🛡️ Je sens une tentative de hack mal déguisée... Tu crois vraiment que ça va marcher ? 😏"
+            input_to_use = self._sanitize_user_input(user_input)
+
+        prompt = self._build_prompt(input_to_use)
         return self._send_to_ollama(prompt)
 
     def _build_prompt(self, user_input: str) -> str:
