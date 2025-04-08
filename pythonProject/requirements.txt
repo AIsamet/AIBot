@@ -1,0 +1,5 @@
+requests
+uvicorn
+fastapi
+pydantic
+discord.py

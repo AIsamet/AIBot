@@ -1,0 +1,6 @@
+.venv/*
+.idea/*
+data/*
+conversations.json
+config.py
+bot/personas.json
