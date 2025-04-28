@@ -84,6 +84,9 @@ class OllamaClient:
         self.secured = secured
         self.personality_name = personality_name
         self.system_prompt = self._load_personality_prompt(personalities_path, personality_name)
+        self.chat_history: List[Dict[str, str]] = []
+        self.max_history = 6
+        self.user_profile: str = ""
 
     def _load_personality_prompt(self, path: str, name: str) -> str | None:
         if not name:
@@ -98,21 +101,45 @@ class OllamaClient:
             return None
 
     def generate_response(self, user_input: str) -> str:
-        input_to_use = user_input
+        clean_input = self._extract_user_message(user_input)
 
         if self.secured:
-            if self._is_injection_attempt(user_input) or self._is_fuzzy_injection(user_input):
+            if self._is_injection_attempt(clean_input) or self._is_fuzzy_injection(clean_input):
                 return "🛡️ Je sens une tentative de hack mal déguisée... Tu crois vraiment que ça va marcher ? 😏"
-            input_to_use = self._sanitize_user_input(user_input)
+            clean_input = self._sanitize_user_input(clean_input)
 
-        prompt = self._build_prompt(input_to_use)
-        return self._send_to_ollama(prompt)
+        self._add_to_history("user", clean_input)
+        prompt = self._build_prompt()
+        response = self._send_to_ollama(prompt)
+        self._add_to_history("assistant", response)
+        print(f"History : {self.chat_history}")
+        return response
 
-    def _build_prompt(self, user_input: str) -> str:
+    def _extract_user_message(self, user_input: str) -> str:
+        match = re.search(r"profil de l'utilisateur\s*:\s*(.*?)\n+message reçu\s*:\s*(.*)", user_input, re.DOTALL | re.IGNORECASE)
+        if match:
+            self.user_profile = match.group(1).strip()
+            return match.group(2).strip()
+        return user_input.strip()
+
+    def _add_to_history(self, role: str, content: str):
+        self.chat_history.append({"role": role, "content": content})
+        if len(self.chat_history) > self.max_history:
+            self.chat_history = self.chat_history[-self.max_history:]
+
+    def _build_prompt(self) -> str:
+        parts = []
         if self.system_prompt:
-            return f"Ton role play : {self.system_prompt}\n\nPrompt utilisateur : {user_input}\nIA :"
-        else:
-            return user_input
+            parts.append(f"Contexte système : {self.system_prompt}\n")
+        if self.user_profile:
+            parts.append(f"Profil utilisateur : {self.user_profile}\n")
+
+        for message in self.chat_history:
+            prefix = "Utilisateur" if message["role"] == "user" else "Assistant"
+            parts.append(f"{prefix} : {message['content']}")
+
+        parts.append("Assistant :")
+        return "\n".join(parts)
 
     def _send_to_ollama(self, prompt: str) -> str:
         url = f"{self.base_url}/api/generate"
@@ -144,3 +171,9 @@ class OllamaClient:
         for keyword, replacement in self._DANGEROUS_KEYWORDS.items():
             lowered = lowered.replace(keyword, replacement)
         return lowered
+
+    def get_last_user_message(self) -> str | None:
+        for msg in reversed(self.chat_history):
+            if msg["role"] == "user":
+                return msg["content"]
+        return None

@@ -4,7 +4,7 @@ import discord
 from discord.ext import commands
 
 from client.ollama_client import OllamaClient
-from config import DISCORD_TOKEN, BASE_URL, MODEL_NAME, PERSONALITIES_PATH
+from config import DISCORD_TOKEN, BASE_URL, MODEL_NAME, PERSONALITIES_PATH, USER_PERSONAS_PATH
 
 # --- Configuration ---
 intents = discord.Intents.default()
@@ -14,12 +14,13 @@ ollama = OllamaClient(
     base_url=BASE_URL,
     model=MODEL_NAME,
     personalities_path=PERSONALITIES_PATH,
-    personality_name="malveillanceMax"
+    personality_name="malveillance",
+    secured=False
 )
 
 # --- Chargement des personas ---
 try:
-    with open("personas.json", encoding="utf-8") as f:
+    with open(USER_PERSONAS_PATH, encoding="utf-8") as f:
         USER_PERSONAS = json.load(f)
     print(f"✅ {len(USER_PERSONAS)} personas chargés.")
 except FileNotFoundError:
@@ -28,7 +29,7 @@ except FileNotFoundError:
 
 # --- Utilitaires ---
 MAX_DISCORD_LENGTH = 2000
-PROBA_REPONSE = 0.10
+PROBA_REPONSE = 0
 
 def build_prompt(message_text: str, author_name: str) -> str:
     persona = USER_PERSONAS.get(author_name)
@@ -80,6 +81,23 @@ async def tonton_chat(ctx, *, message: str):
         await send_response(ctx, response)
     except Exception as e:
         await ctx.send(f"⚠️ Tonton est vénère, il bug : {str(e)}")
+
+@bot.command(name="profil")
+async def show_persona(ctx, *, username: str = None):
+    target = username or ctx.author.name
+    persona = USER_PERSONAS.get(target)
+
+    if persona:
+        await ctx.send(f"🧠 Profil de **{target}** :")
+        chunks = [persona[i:i + MAX_DISCORD_LENGTH] for i in range(0, len(persona), MAX_DISCORD_LENGTH)]
+        for chunk in chunks:
+            await ctx.send(chunk)
+    else:
+        if username:
+            await ctx.send(f"❌ Tonton connaît pas ce clown : **{username}**.")
+        else:
+            await ctx.send("❌ Tonton te connaît pas encore. Parle un peu plus qu’on te dresse le portrait 😏")
+
 
 @bot.command(name="scrape")
 @commands.is_owner()
